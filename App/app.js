@@ -1,4 +1,4 @@
-import {connect, StringCodec} from "nats"
+import { connect, StringCodec } from "nats"
 import fs from "fs"
 import minimist from 'minimist'
 
@@ -9,79 +9,60 @@ const connServer = "localhost:4222";
 const args = minimist(process.argv.slice(2))
 const filePath = args.path;
 
-if(filePath == undefined)
-{
-    console.log ("You haven't entered --path argument!\n");
+if (filePath == undefined) {
+    console.log("You haven't entered --path argument!\n");
     process.exit();
 }
 
 //Check if file exists 
-function checkFileExists(path)
-{
+function checkFileExists(path) {
     let flag = true;
-    try
-    {
+    try {
         fs.accessSync(path);
     }
-    catch(e)
-    {
+    catch (e) {
         flag = false;
     }
     return flag;
 }
 
 
-if(checkFileExists(filePath) == false)
-{
+if (!checkFileExists(filePath)) {
     console.log("The file you are looking for does not exist!")
     process.exit();
 }
-else 
-{
+else {
     console.log("File exists")
 }
 
-function checkMP4Extension(filePath)
-{
+function checkMP4Extension(filePath) {
     let splitArr = filePath.split('.');
-    if(splitArr[splitArr.length-1]=='mp4')
+    if (splitArr[splitArr.length - 1] == 'mp4')
         return true;
     else
-        return false; 
+        return false;
 }
 
-if(checkMP4Extension(filePath) == false)
-{
+if (!checkMP4Extension(filePath)) {
     console.log("Given file does not have .mp4 extension");
     process.exit();
 }
 
 
 // Connect to server
-const server = {servers : connServer}
-try{
+const server = { servers: connServer }
+try {
     const nc = await connect(server);
     console.log("Succesfully connected to:", connServer)
     const sc = StringCodec();
 
-
+    //Send request - await response
     let enc = new TextEncoder();
-    await nc.request("mp4InitSegment", enc.encode(filePath), { timeout: 30000 })
-        .then((m) => {
-        console.log(`Response: ${sc.decode(m.data)}`);
-        })
-        .catch((err) => {
-        console.log(`Request Error: ${err.message}`);
-        });
-
-
+    const response = await nc.request("mp4InitSegment", enc.encode(filePath), { timeout: 30000 })
+    console.log(`Response: ${sc.decode(response.data)}`);
     await nc.close();
 }
-catch(exception){
+catch (exception) {
     console.log("Connection to server failed!");
 }
-
-
-
-
 

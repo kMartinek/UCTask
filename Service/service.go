@@ -1,16 +1,3 @@
-/*
-TO DO
-
-- start server
-- handle request
-- recieve file
-- process mp4 file
-	- read initialization segment
-	- write initialization segment to new file
-- return new file
-
-*/
-
 package main
 
 import (
@@ -49,12 +36,12 @@ func getBoxInfo(data []byte, startIndex int) (uint32, string, error) {
 	return boxSize, boxType, err
 }
 
-func extractMP4Init(path string) string {
+func extractMP4Init(path string) (string, error) {
 
 	//Open file
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
 
 	i := 0
@@ -63,7 +50,7 @@ func extractMP4Init(path string) string {
 		//Get box size and type
 		boxSize, boxType, err := getBoxInfo(data, i)
 		if err != nil {
-			return err.Error()
+			return "", err
 		}
 
 		if boxType == "ftyp" {
@@ -71,7 +58,7 @@ func extractMP4Init(path string) string {
 			//Check if next box is "moov"
 			nextBoxSize, nextBoxType, err := getBoxInfo(data, i+int(boxSize))
 			if err != nil {
-				return err.Error()
+				return "", err
 			}
 
 			if nextBoxType == "moov" {
@@ -81,7 +68,7 @@ func extractMP4Init(path string) string {
 				resultFileName := fileName + "_init_" + fmt.Sprintf("%d", time.Now().Unix()) + ".mp4"
 				resultFile, err := os.Create(resultFileName)
 				if err != nil {
-					return err.Error()
+					return "", err
 				}
 
 				//Write init segment to File
@@ -90,24 +77,19 @@ func extractMP4Init(path string) string {
 				//Return resultFile path
 				resPath, err := filepath.Abs(filepath.Dir(resultFile.Name()))
 				if err != nil {
-					return err.Error()
+					return "", err
 				}
-
-				return (resPath + "\\" + resultFileName)
+				return (resPath + "\\" + resultFileName), nil
 			}
-
 		}
-
 		//Move on to the next box
 		i = i + int(boxSize)
 	}
 	//Whole file analyzed and segment not found
-	return ("Init segment not found")
+	return "Init segment not found", nil
 }
 
 func main() {
-
-	//fmt.Println(extractMP4Init("C:\\Users\\Kac\\Desktop\\Go\\UC Task\\UCTask\\Service\\video.4"))
 
 	// Connect to a server
 	const server = "localhost:4222"
@@ -118,14 +100,19 @@ func main() {
 	}
 	fmt.Println("Successfully connected to:", server)
 
+	//Handle request
 	nc.Subscribe("mp4InitSegment", func(m *nats.Msg) {
-		fmt.Println("Request recieved...")
 
+		fmt.Println("Request recieved...")
 		fmt.Println("Filepath received: ", string(m.Data))
 
-		nc.Publish(m.Reply, []byte(extractMP4Init(string(m.Data))))
+		response, err := extractMP4Init(string(m.Data))
+		if err != nil {
+			nc.Publish(m.Reply, []byte(err.Error()))
+		} else {
+			nc.Publish(m.Reply, []byte(response))
+		}
 	})
 
 	runtime.Goexit()
-
 }
