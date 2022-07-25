@@ -10,7 +10,10 @@ First, start nats-server via docker.
 docker run -d -p 4222:4222 -p 8222:8222 -p 6222:6222 --name nats-server nats:latest
 ```
 
-Then run `service.go`
+Then in `service` folder run `service.go`
+```
+go run service.go
+```
 
 In the `app` folder run `npm ci` to get required node_modules
 ```
