@@ -22,19 +22,18 @@ func extractNameFromPath(path string) string {
 }
 
 func getBoxInfo(data []byte, startIndex int) (uint32, string, error) {
-	var err error = nil
 	var boxSize uint32
 	var boxType string
 
 	buf := bytes.NewReader(data[startIndex : startIndex+4])
 	readErr := binary.Read(buf, binary.BigEndian, &boxSize)
 	if readErr != nil {
-		err = readErr
+		return 0, "", readErr
 	}
 
 	boxType = string(data[startIndex+4 : startIndex+8])
 
-	return boxSize, boxType, err
+	return boxSize, boxType, nil
 }
 
 func extractMP4Init(path string) (string, error) {
