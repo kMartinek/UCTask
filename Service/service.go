@@ -17,83 +17,113 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go"
-
-	"os"
 )
 
-/*func getBoxSize(file byte[], position int) int{
-
-}*/
-
-func parseMP4(path string) string {
-	dat, err := os.ReadFile(path)
-	check(err)
-
-	//check if result file exists
-	//if true delete content or delete file
-
-	//create new result file
-	resultFile, err := os.Create("result.txt")
-	check(err)
-
-	i := 0
-	var boxSize uint32
-	//var boxType string
-	for i < len(dat) {
-		//read size of the box
-		buf := bytes.NewReader(dat[i : i+4])
-		err := binary.Read(buf, binary.BigEndian, &boxSize)
-		check(err)
-
-		resultFile.WriteString("Box Size: " + fmt.Sprintf("%d", boxSize) + "\n")
-		fmt.Println("Box size: ", boxSize)
-		//read type of the box
-
-		dio := string(dat[i+4 : i+8])
-		resultFile.WriteString("Box Type: " + dio + "\n")
-		fmt.Println("boxType: ", dio)
-
-		if dio == "ftyp" {
-			resultFile.WriteString("ftyp data: " + string(dat[i+8:i+int(boxSize)]) + "\n")
-			fmt.Println("Data:", string(dat[i+8:i+int(boxSize)]))
-		}
-
-		resultFile.WriteString("Box indexes: [" + fmt.Sprintf("%d", i) + ":" + fmt.Sprintf("%d", i+int(boxSize)) + "]\n\n")
-		//read data
-		i = i + int(boxSize)
-		fmt.Println("Brojač: ", i)
-
-	}
-	resPath, err := filepath.Abs(filepath.Dir(resultFile.Name()))
-	check(err)
-	fmt.Println(resPath + "\\" + resultFile.Name())
-	return resPath
+func extractNameFromPath(path string) string {
+	pathArray := strings.Split(path, "\\")
+	nameWithExtension := pathArray[len(pathArray)-1]
+	nameWithoutExtension := strings.Split(nameWithExtension, ".")[0]
+	return nameWithoutExtension
 }
 
-func check(e error) {
-	if e != nil {
-		panic(e)
+func getBoxInfo(data []byte, startIndex int) (uint32, string, error) {
+	var err error = nil
+	var boxSize uint32
+	var boxType string
+
+	buf := bytes.NewReader(data[startIndex : startIndex+4])
+	readErr := binary.Read(buf, binary.BigEndian, &boxSize)
+	if readErr != nil {
+		err = readErr
 	}
+
+	boxType = string(data[startIndex+4 : startIndex+8])
+
+	return boxSize, boxType, err
+}
+
+func extractMP4Init(path string) string {
+
+	//Open file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err.Error()
+	}
+
+	i := 0
+	for i < len(data) {
+
+		//Get box size and type
+		boxSize, boxType, err := getBoxInfo(data, i)
+		if err != nil {
+			return err.Error()
+		}
+
+		if boxType == "ftyp" {
+
+			//Check if next box is "moov"
+			nextBoxSize, nextBoxType, err := getBoxInfo(data, i+int(boxSize))
+			if err != nil {
+				return err.Error()
+			}
+
+			if nextBoxType == "moov" {
+
+				//Create new result file
+				fileName := extractNameFromPath(path)
+				resultFileName := fileName + "_init_" + fmt.Sprintf("%d", time.Now().Unix()) + ".mp4"
+				resultFile, err := os.Create(resultFileName)
+				if err != nil {
+					return err.Error()
+				}
+
+				//Write init segment to File
+				resultFile.Write(data[i : i+int(boxSize)+int(nextBoxSize)])
+
+				//Return resultFile path
+				resPath, err := filepath.Abs(filepath.Dir(resultFile.Name()))
+				if err != nil {
+					return err.Error()
+				}
+
+				return (resPath + "\\" + resultFileName)
+			}
+
+		}
+
+		//Move on to the next box
+		i = i + int(boxSize)
+	}
+	//Whole file analyzed and segment not found
+	return ("Init segment not found")
 }
 
 func main() {
 
-	parseMP4("C:\\Users\\Kac\\Downloads\\video.mp4")
+	//fmt.Println(extractMP4Init("C:\\Users\\Kac\\Desktop\\Go\\UC Task\\UCTask\\Service\\video.4"))
 
 	// Connect to a server
+	const server = "localhost:4222"
 
-	// Connect to a server
-	nc, err := nats.Connect("localhost:4222")
-	check(err)
+	nc, err := nats.Connect(server)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to:", server)
 
 	nc.Subscribe("mp4InitSegment", func(m *nats.Msg) {
-		fmt.Println("Dobio poruku")
-		fmt.Println(string(m.Data))
-		nc.Publish(m.Reply, []byte("parseMP4(string(m.Data))"))
+		fmt.Println("Request recieved...")
+
+		fmt.Println("Filepath received: ", string(m.Data))
+
+		nc.Publish(m.Reply, []byte(extractMP4Init(string(m.Data))))
 	})
 
 	runtime.Goexit()

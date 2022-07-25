@@ -1,36 +1,23 @@
-/*
-TO DO:
-
-- get FilePath via command line parameter
-    - read from cmd
-    - if no args then print error msg || interface
-    - check if file path is correct (file exists)
-- connect to service
-- send file for processing
-- recieve and print info
-
-*/
-
 import {connect, StringCodec} from "nats"
 import fs from "fs"
-//import process from 'minimist'
+import minimist from 'minimist'
 
-//Read arguments
+const connServer = "localhost:4222";
 
 
-const args = process.argv.slice(2);
-console.log (args);
-if(args == undefined)
+//Read path argument
+const args = minimist(process.argv.slice(2))
+const filePath = args.path;
+
+if(filePath == undefined)
 {
-    console.log ("You haven't entered path argument!");
+    console.log ("You haven't entered --path argument!\n");
     process.exit();
 }
 
-//Check for file 
-
+//Check if file exists 
 function checkFileExists(path)
 {
-    console.log("Path: ", path)
     let flag = true;
     try
     {
@@ -40,57 +27,61 @@ function checkFileExists(path)
     {
         flag = false;
     }
-    console.log("Flag", flag)
     return flag;
 }
 
-if(checkFileExists(args[0]) == false)
+
+if(checkFileExists(filePath) == false)
 {
     console.log("The file you are looking for does not exist!")
-    //process.exit();
+    process.exit();
 }
 else 
 {
     console.log("File exists")
 }
 
+function checkMP4Extension(filePath)
+{
+    let splitArr = filePath.split('.');
+    if(splitArr[splitArr.length-1]=='mp4')
+        return true;
+    else
+        return false; 
+}
+
+if(checkMP4Extension(filePath) == false)
+{
+    console.log("Given file does not have .mp4 extension");
+    process.exit();
+}
+
 
 // Connect to server
-const server = {servers : "localhost:4222"}
-/*try
-{
-    const nc = await connect(server)
-    console.log(`connected to ${nc.getServer()}`);
+const server = {servers : connServer}
+try{
+    const nc = await connect(server);
+    console.log("Succesfully connected to:", connServer)
+    const sc = StringCodec();
 
-    const done = nc.closed();
 
-    const err = await done;
-    if (err){
-        console.log(`error closing:`, err);
-    }
+    let enc = new TextEncoder();
+    await nc.request("mp4InitSegment", enc.encode(filePath), { timeout: 30000 })
+        .then((m) => {
+        console.log(`Response: ${sc.decode(m.data)}`);
+        })
+        .catch((err) => {
+        console.log(`Request Error: ${err.message}`);
+        });
+
+
+    await nc.close();
 }
-catch(err)
-{
-    console.log(`error connecting to ${JSON.stringify(server)}`)
+catch(exception){
+    console.log("Connection to server failed!");
 }
-*/
-const nc = await connect(server)
 
-const sc = StringCodec();
 
-// the client makes a request and receives a promise for a message
-// by default the request times out after 1s (1000 millis) and has
-// no payload.
-await nc.request("mp4InitSegment", new Uint8Array(args[0]), { timeout: 30000 })
-    .then((m) => {
-    console.log(`got response: ${sc.decode(m.data)}`);
-    })
-    .catch((err) => {
-    console.log(`problem with request: ${err.message}`);
-    });
 
-await nc.request()
-
-await nc.close();
 
 
