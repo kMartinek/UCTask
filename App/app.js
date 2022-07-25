@@ -63,6 +63,6 @@ try {
     await nc.close();
 }
 catch (exception) {
-    console.log("Connection to server failed!");
+    console.log(`Failed with: ${exception}`);
 }
 

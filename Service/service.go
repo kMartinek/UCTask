@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,7 +87,7 @@ func extractMP4Init(path string) (string, error) {
 		i = i + int(boxSize)
 	}
 	//Whole file analyzed and segment not found
-	return "Init segment not found", nil
+	return "", errors.New("Init segment not found")
 }
 
 func main() {
